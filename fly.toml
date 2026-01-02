@@ -4,16 +4,39 @@
 #
 
 app = 'obsidian-capital'
-primary_region = 'iad'
+primary_region = 'yyz'
 
 [build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  # Bot Configuration
+  DRY_RUN = "true"
+  RUST_LOG= "info"
+  LOG_DIR = "/var/log/arbitrage-bot"
+  # Discord Alerts (get webhook from Discord Server Settings > Integrations > Webhooks)
+  DISCORD_WEBHOOK_URL = ""
+  # Kalshi API
+  KALSHI_API_KEY_ID = ""
+  KALSHI_PRIVATE_KEY_PATH = "/etc/arbitrage-bot/kalshi-key.pem"
+  # Polymarket
+  POLY_PRIVATE_KEY = ""
+  POLY_FUNDER = ""
+  # Circuit Breaker (conservative defaults - adjust after testing)
+  CB_MAX_POSITION_PER_MARKET = "10000"
+  CB_MAX_TOTAL_POSITION = "50000"
+  CB_MAX_DAILY_LOSS = "100.0"
+  CB_MAX_CONSECUTIVE_ERRORS = "5"
+  CB_COOLDOWN_SECS = "300"
+  # Prometheus Metrics
+  METRICS_ENABLED = "true"
 
 [http_service]
   internal_port = 9090
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
 [[vm]]
