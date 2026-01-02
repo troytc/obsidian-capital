@@ -23,9 +23,10 @@ primary_region = 'yyz'
   POLY_PRIVATE_KEY = ""
   POLY_FUNDER = ""
   # Circuit Breaker (conservative defaults - adjust after testing)
-  CB_MAX_POSITION_PER_MARKET = "10000"
-  CB_MAX_TOTAL_POSITION = "50000"
-  CB_MAX_DAILY_LOSS = "100.0"
+  CB_ENABLED = "true"
+  CB_MAX_POSITION_PER_MARKET = "10"
+  CB_MAX_TOTAL_POSITION = "25"
+  CB_MAX_DAILY_LOSS = "50.0"
   CB_MAX_CONSECUTIVE_ERRORS = "5"
   CB_COOLDOWN_SECS = "300"
   # Prometheus Metrics
