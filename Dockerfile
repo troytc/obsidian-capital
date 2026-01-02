@@ -77,6 +77,23 @@ RUN printf '%s\n' \
     'GRAFANA_CLOUD_PROMETHEUS_URL=https://prometheus-prod-XX-XXXX.grafana.net/api/prom/push' \
     > /etc/arbitrage-bot/config.env
 
+# Create startup script that handles env var to file conversion
+RUN printf '%s\n' \
+    '#!/bin/bash' \
+    'set -e' \
+    '' \
+    '# Convert KALSHI_PRIVATE_KEY_CONTENT env var to file if provided' \
+    'if [ ! -z "$KALSHI_PRIVATE_KEY_CONTENT" ]; then' \
+    '  echo "$KALSHI_PRIVATE_KEY_CONTENT" > /etc/arbitrage-bot/kalshi-key.pem' \
+    '  chmod 600 /etc/arbitrage-bot/kalshi-key.pem' \
+    '  echo "Created Kalshi private key file from env var"' \
+    'fi' \
+    '' \
+    '# Run the application' \
+    'exec /opt/arbitrage-bot/prediction-market-arbitrage' \
+    > /opt/arbitrage-bot/start.sh && \
+    chmod +x /opt/arbitrage-bot/start.sh
+
 # Set ownership and permissions
 RUN chown -R arbitrage:arbitrage /opt/arbitrage-bot /etc/arbitrage-bot && \
     chmod 600 /etc/arbitrage-bot/config.env
@@ -95,5 +112,5 @@ EXPOSE 9090
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f prediction-market-arbitrage || exit 1
 
-# Run the application
-CMD ["/opt/arbitrage-bot/prediction-market-arbitrage"]
+# Run the startup script instead of the app directly
+CMD ["/opt/arbitrage-bot/start.sh"]
