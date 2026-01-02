@@ -1,4 +1,4 @@
-FROM rust:1.75-bookworm
+FROM rust:latest
 
 # Install build dependencies
 RUN apt-get update && \
@@ -25,8 +25,9 @@ RUN mkdir -p /opt/arbitrage-bot \
 # Clone and build as root first
 WORKDIR /tmp/build
 
-# Clone the repository
+# Clone the repository and build
 RUN git clone https://github.com/KaboomFox/Polymarket-Kalshi-Arbitrage-bot.git . && \
+    rustup update && \
     cargo build --release
 
 # Copy built artifacts to final location
