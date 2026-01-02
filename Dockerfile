@@ -22,56 +22,67 @@ RUN mkdir -p /opt/arbitrage-bot \
     /etc/arbitrage-bot \
     /var/log/arbitrage-bot
 
+# Clone and build as root first
+WORKDIR /tmp/build
+
+# Clone the repository
+RUN git clone https://github.com/KaboomFox/Polymarket-Kalshi-Arbitrage-bot.git . && \
+    cargo build --release
+
+# Copy built artifacts to final location
+RUN cp target/release/prediction-market-arbitrage /opt/arbitrage-bot/prediction-market-arbitrage && \
+    cp kalshi_team_cache.json /opt/arbitrage-bot/ 2>/dev/null || true && \
+    chmod +x /opt/arbitrage-bot/prediction-market-arbitrage
+
+# Clean up build directory
+RUN rm -rf /tmp/build
+
 # Set working directory
 WORKDIR /opt/arbitrage-bot
 
-# Clone the repository
-RUN git clone https://github.com/KaboomFox/Polymarket-Kalshi-Arbitrage-bot.git /tmp/bot && \
-    mv /tmp/bot/* /opt/arbitrage-bot/ && \
-    rm -rf /tmp/bot
-
-# Build the Rust application
-RUN cargo build --release && \
-    cp target/release/prediction-market-arbitrage /opt/arbitrage-bot/ && \
-    cp kalshi_team_cache.json /opt/arbitrage-bot/ 2>/dev/null || true
-
-# Create default config template
-RUN echo "# Bot Configuration" > /etc/arbitrage-bot/config.env && \
-    echo "DRY_RUN=true" >> /etc/arbitrage-bot/config.env && \
-    echo "RUST_LOG=info" >> /etc/arbitrage-bot/config.env && \
-    echo "LOG_DIR=/var/log/arbitrage-bot" >> /etc/arbitrage-bot/config.env && \
-    echo "" >> /etc/arbitrage-bot/config.env && \
-    echo "# Discord Alerts (get webhook from Discord Server Settings > Integrations > Webhooks)" >> /etc/arbitrage-bot/config.env && \
-    echo "DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE" >> /etc/arbitrage-bot/config.env && \
-    echo "" >> /etc/arbitrage-bot/config.env && \
-    echo "# Kalshi API" >> /etc/arbitrage-bot/config.env && \
-    echo "KALSHI_API_KEY_ID=your-api-key-id" >> /etc/arbitrage-bot/config.env && \
-    echo "KALSHI_PRIVATE_KEY_PATH=/etc/arbitrage-bot/kalshi-key.pem" >> /etc/arbitrage-bot/config.env && \
-    echo "" >> /etc/arbitrage-bot/config.env && \
-    echo "# Polymarket" >> /etc/arbitrage-bot/config.env && \
-    echo "POLY_PRIVATE_KEY=0x_your_private_key_here" >> /etc/arbitrage-bot/config.env && \
-    echo "POLY_FUNDER=0x_your_wallet_address_here" >> /etc/arbitrage-bot/config.env && \
-    echo "" >> /etc/arbitrage-bot/config.env && \
-    echo "# Circuit Breaker (conservative defaults - adjust after testing)" >> /etc/arbitrage-bot/config.env && \
-    echo "CB_MAX_POSITION_PER_MARKET=10000" >> /etc/arbitrage-bot/config.env && \
-    echo "CB_MAX_TOTAL_POSITION=50000" >> /etc/arbitrage-bot/config.env && \
-    echo "CB_MAX_DAILY_LOSS=100.0" >> /etc/arbitrage-bot/config.env && \
-    echo "CB_MAX_CONSECUTIVE_ERRORS=5" >> /etc/arbitrage-bot/config.env && \
-    echo "CB_COOLDOWN_SECS=300" >> /etc/arbitrage-bot/config.env && \
-    echo "" >> /etc/arbitrage-bot/config.env && \
-    echo "# Prometheus Metrics" >> /etc/arbitrage-bot/config.env && \
-    echo "METRICS_ENABLED=true" >> /etc/arbitrage-bot/config.env && \
-    echo "METRICS_PORT=9090" >> /etc/arbitrage-bot/config.env && \
-    echo "METRICS_BIND_ADDR=0.0.0.0" >> /etc/arbitrage-bot/config.env && \
-    echo "" >> /etc/arbitrage-bot/config.env && \
-    echo "# Grafana Cloud (get from https://grafana.com/products/cloud/ -> Stack -> Prometheus -> Details)" >> /etc/arbitrage-bot/config.env && \
-    echo "GRAFANA_CLOUD_USER=your-user-id" >> /etc/arbitrage-bot/config.env && \
-    echo "GRAFANA_CLOUD_API_KEY=your-api-key" >> /etc/arbitrage-bot/config.env && \
-    echo "GRAFANA_CLOUD_PROMETHEUS_URL=https://prometheus-prod-XX-XXXX.grafana.net/api/prom/push" >> /etc/arbitrage-bot/config.env
+# Create default config template using printf for better multiline handling
+RUN printf '%s\n' \
+    '# Bot Configuration' \
+    'DRY_RUN=true' \
+    'RUST_LOG=info' \
+    'LOG_DIR=/var/log/arbitrage-bot' \
+    '' \
+    '# Discord Alerts (get webhook from Discord Server Settings > Integrations > Webhooks)' \
+    'DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE' \
+    '' \
+    '# Kalshi API' \
+    'KALSHI_API_KEY_ID=your-api-key-id' \
+    'KALSHI_PRIVATE_KEY_PATH=/etc/arbitrage-bot/kalshi-key.pem' \
+    '' \
+    '# Polymarket' \
+    'POLY_PRIVATE_KEY=0x_your_private_key_here' \
+    'POLY_FUNDER=0x_your_wallet_address_here' \
+    '' \
+    '# Circuit Breaker (conservative defaults - adjust after testing)' \
+    'CB_MAX_POSITION_PER_MARKET=10000' \
+    'CB_MAX_TOTAL_POSITION=50000' \
+    'CB_MAX_DAILY_LOSS=100.0' \
+    'CB_MAX_CONSECUTIVE_ERRORS=5' \
+    'CB_COOLDOWN_SECS=300' \
+    '' \
+    '# Prometheus Metrics' \
+    'METRICS_ENABLED=true' \
+    'METRICS_PORT=9090' \
+    'METRICS_BIND_ADDR=0.0.0.0' \
+    '' \
+    '# Grafana Cloud (get from https://grafana.com/products/cloud/ -> Stack -> Prometheus -> Details)' \
+    'GRAFANA_CLOUD_USER=your-user-id' \
+    'GRAFANA_CLOUD_API_KEY=your-api-key' \
+    'GRAFANA_CLOUD_PROMETHEUS_URL=https://prometheus-prod-XX-XXXX.grafana.net/api/prom/push' \
+    > /etc/arbitrage-bot/config.env
 
 # Set ownership and permissions
 RUN chown -R arbitrage:arbitrage /opt/arbitrage-bot /etc/arbitrage-bot && \
     chmod 600 /etc/arbitrage-bot/config.env
+
+# Verify the binary exists and is executable
+RUN ls -la /opt/arbitrage-bot/prediction-market-arbitrage && \
+    file /opt/arbitrage-bot/prediction-market-arbitrage
 
 # Switch to non-root user
 USER arbitrage
