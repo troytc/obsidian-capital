@@ -8,7 +8,8 @@ RUN apt-get update && \
     libssl-dev \
     curl \
     git \
-    ca-certificates && \
+    ca-certificates \
+    unzip && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for running the bot
@@ -17,10 +18,13 @@ RUN useradd --system --create-home --shell /bin/bash arbitrage
 # Create necessary directories
 RUN mkdir -p /opt/arbitrage-bot \
     /etc/arbitrage-bot \
-    /var/log/arbitrage-bot && \
+    /var/log/arbitrage-bot \
+    /etc/alloy \
+    /var/lib/alloy && \
     chown -R arbitrage:arbitrage /opt/arbitrage-bot \
     /etc/arbitrage-bot \
-    /var/log/arbitrage-bot
+    /var/log/arbitrage-bot \
+    /var/lib/alloy
 
 # Clone and build as root first
 WORKDIR /tmp/build
@@ -35,11 +39,46 @@ RUN cp target/release/prediction-market-arbitrage /opt/arbitrage-bot/prediction-
     cp kalshi_team_cache.json /opt/arbitrage-bot/ 2>/dev/null || true && \
     chmod +x /opt/arbitrage-bot/prediction-market-arbitrage
 
-# Setup grafana alloy
-RUN scripts/setup-grafana-alloy.sh
-
 # Clean up build directory
 RUN rm -rf /tmp/build
+
+# Install Grafana Alloy
+RUN ARCH=$(uname -m) && \
+    case $ARCH in \
+        x86_64) ALLOY_ARCH="amd64" ;; \
+        aarch64) ALLOY_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    ALLOY_VERSION="1.4.2" && \
+    cd /tmp && \
+    curl -LO "https://github.com/grafana/alloy/releases/download/v${ALLOY_VERSION}/alloy-linux-${ALLOY_ARCH}.zip" && \
+    unzip -o "alloy-linux-${ALLOY_ARCH}.zip" && \
+    mv "alloy-linux-${ALLOY_ARCH}" /usr/local/bin/alloy && \
+    chmod +x /usr/local/bin/alloy && \
+    rm -f "alloy-linux-${ALLOY_ARCH}.zip"
+
+# Create Alloy configuration
+RUN printf '%s\n' \
+    '// Grafana Alloy configuration for Arbitrage Bot metrics' \
+    '// Scrapes local Prometheus endpoint and pushes to Grafana Cloud' \
+    '' \
+    'prometheus.scrape "arb_bot" {' \
+    '  targets = [{"__address__" = "localhost:9090"}]' \
+    '  scrape_interval = "60s"' \
+    '  scrape_timeout = "10s"' \
+    '  forward_to = [prometheus.remote_write.grafana_cloud.receiver]' \
+    '}' \
+    '' \
+    'prometheus.remote_write "grafana_cloud" {' \
+    '  endpoint {' \
+    '    url = env("GRAFANA_CLOUD_PROMETHEUS_URL")' \
+    '    basic_auth {' \
+    '      username = env("GRAFANA_CLOUD_USER")' \
+    '      password = env("GRAFANA_CLOUD_API_KEY")' \
+    '    }' \
+    '  }' \
+    '}' \
+    > /etc/alloy/config.alloy
 
 # Set working directory
 WORKDIR /opt/arbitrage-bot
@@ -80,7 +119,7 @@ RUN printf '%s\n' \
     'GRAFANA_CLOUD_PROMETHEUS_URL=https://prometheus-prod-XX-XXXX.grafana.net/api/prom/push' \
     > /etc/arbitrage-bot/config.env
 
-# Create startup script that handles env var to file conversion
+# Create startup script that handles env var to file conversion and starts both services
 RUN printf '%s\n' \
     '#!/bin/bash' \
     'set -e' \
@@ -90,6 +129,16 @@ RUN printf '%s\n' \
     '  echo "$KALSHI_PRIVATE_KEY_CONTENT" > /etc/arbitrage-bot/kalshi-key.pem' \
     '  chmod 600 /etc/arbitrage-bot/kalshi-key.pem' \
     '  echo "Created Kalshi private key file from env var"' \
+    'fi' \
+    '' \
+    '# Start Grafana Alloy in background if Grafana Cloud credentials are configured' \
+    'if [ ! -z "$GRAFANA_CLOUD_USER" ] && [ "$GRAFANA_CLOUD_USER" != "your-user-id" ]; then' \
+    '  echo "Starting Grafana Alloy..."' \
+    '  /usr/local/bin/alloy run /etc/alloy/config.alloy --storage.path=/var/lib/alloy &' \
+    '  ALLOY_PID=$!' \
+    '  echo "Grafana Alloy started (PID: $ALLOY_PID)"' \
+    'else' \
+    '  echo "Grafana Cloud not configured, skipping Alloy startup"' \
     'fi' \
     '' \
     '# Run the application' \
