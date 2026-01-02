@@ -35,6 +35,9 @@ RUN cp target/release/prediction-market-arbitrage /opt/arbitrage-bot/prediction-
     cp kalshi_team_cache.json /opt/arbitrage-bot/ 2>/dev/null || true && \
     chmod +x /opt/arbitrage-bot/prediction-market-arbitrage
 
+# Setup grafana alloy
+RUN scripts/setup-grafana-alloy.sh
+
 # Clean up build directory
 RUN rm -rf /tmp/build
 
